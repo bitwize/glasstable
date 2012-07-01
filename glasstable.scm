@@ -2,7 +2,7 @@
 
 (define gt#workspace '())
 
-(define gt#remembers-commands #f)
+(define gt#remembers-expressions #f)
 
 (define (gt#definition? form)
   (and
@@ -31,7 +31,7 @@
 	      (table-set! gt#def-table i gt#workspace))
 
 	    (set-car! (table-ref gt#def-table i) form)))
-        (if (or gt#remembers-commands (gt#definition? form))
+        (if (or gt#remembers-expressions (gt#definition? form))
 	    (set! gt#workspace (cons form gt#workspace)))))
 
 (define (gt#save-workspace fn)
@@ -73,16 +73,35 @@
     (display (gt#prompt) out-port)
     (force-output out-port)
     (let ((form (read in-port)))
-      (if (and (pair? form)
-	       (eq? (car form) 'unquote))
-	  (gt#do-directive (cdr form))
-	  (##continuation-capture
-	   (lambda (k)
-	     (with-exception-catcher
-	      (lambda (e)
-		(##display-exception-in-context
-		 e k out-port))
-	      (lambda () (let ((result (eval form)))
-			   (if (not (eq? result #!void)) (begin (pretty-print result))))
-		      (gt#add-to-workspace! form))))))
+      (##continuation-capture
+       (lambda (k)
+	 (with-exception-catcher
+	  (lambda (e)
+	    (##display-exception-in-context
+	     e k out-port))
+	  (lambda () 
+	    (if (and (pair? form)
+		     (eq? (car form) 'unquote))
+		(gt#do-command (cadr form))
+		(let ((result (eval form)))
+		  (if (not (eq? result #!void)) (begin (pretty-print result)))
+		  (gt#add-to-workspace! form)))))))
       (loop))))
+
+(define (gt#do-command cmd)
+  (if (pair? cmd)
+      (cond
+       ((eq? (car cmd) 'new-workspace)
+	(gt#new-workspace))
+       ((eq? (car cmd) 'save-workspace)
+	(if (not (and (pair? (cdr cmd)) (string? (cadr cmd))))
+	    (error "file name for save-workspace must be a string")
+	    (gt#save-workspace (cadr cmd))))
+       ((eq? (car cmd) 'load-workspace)
+	(if (not (and (pair? (cdr cmd)) (string? (cadr cmd))))
+	    (error "file name for load-workspace must be a string")
+	    (gt#load-workspace (cadr cmd))))
+       ((eq? (car cmd) 'workspace-defs-only)
+	(set! gt#remembers-expressions #f))
+       ((eq? (car cmd) 'workspace-defs-and-exprs)
+	(set! gt#remembers-expressions #t)))))
