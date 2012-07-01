@@ -1,6 +1,6 @@
 #!/bin/sh
 GSI=$HOME/local/Gambit-C/bin/gsi      # set to your gsi location
-if [ x$1 == xtable ] ; then
+if [ "x$1" = "xtable" ] ; then
 	$GSI -e '(load "glasstable")(gt#repl)'
 fi
    
