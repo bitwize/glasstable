@@ -51,6 +51,7 @@
 ;;     definition, for Glass Table's purposes, is any pair form whose
 ;;     car begins with `define'. So `define', `define-macro',
 ;;     `define-syntax', `define-record-type', etc. forms all apply.)
+;;     This is the default when you start GT.
 
 ;;   * ,(workspace-defs-and-exprs)
 
