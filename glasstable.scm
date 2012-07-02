@@ -1,3 +1,81 @@
+;; This is Glass Table, an IDE (Interactive Development Environment)
+;; for Gambit. Put quite simply, Glass Table is a REPL that lets you
+;; save your work.
+
+;; Glass Table maintains a "workspace" consisting of the symbols you
+;; have defined at the top level and the forms you used to define
+;; them. This workspace may then be saved into a Scheme file and later
+;; recalled back into the workspace for future work. You may also add
+;; other kinds of expressions to the workspace with a special setting
+;; (see below). What's more, redefinitions of the same identifier will
+;; clobber their old definitions in the workspace. (This only works
+;; correctly when you redefine things the same way you defined them in
+;; the first place; e.g., a symbol defined by `define-macro' should be
+;; redefined with another `define-macro'.)
+
+;; To begin using Glass Table simply enter './glass table' in this
+;; directory. To use Glass Table from within a running Gambit instance
+;; say:
+
+;;   (load "glasstable.scm")
+;;   (gt#repl)
+
+;; This latter option is very handy for writing more complex Scheme
+;; programs in Gambit for Android!
+
+;; Various REPL commands are available:
+
+;;   * ,(new-workspace)
+
+;;     Clears all definitions in the workspace so you can start
+;;     afresh. Beware; currently this does not affect the bindings in
+;;     the environment, so any definitions you made in the REPL can
+;;     still be referenced in future expressions, even though there's
+;;     no workspace entry for them!
+
+;;   * ,(save-workspace filename)
+
+;;     Saves the current workspace as a Scheme source program into the
+;;     file named by `filename'.
+
+;;   * ,(load-workspace filename)
+
+;;     Loads the Scheme program named by `filename' into the
+;;     workspace, and also evaluates each definition or expression in
+;;     the file.
+
+;;   * ,(workspace-defs-only)
+
+;;     Further forms entered into the REPL will only be committed to
+;;     the workspace if they are definitions. (Currently, a
+;;     definition, for Glass Table's purposes, is any pair form whose
+;;     car begins with `define'. So `define', `define-macro',
+;;     `define-syntax', `define-record-type', etc. forms all apply.)
+
+;;   * ,(workspace-defs-and-exprs)
+
+;;     Any further form entered into the REPL will be committed to the
+;;     workspace.
+
+;; Because I wrote a rudimentary REPL for GT for the time being, the
+;; Gambit REPL commands don't work inside the GT REPL. I want to
+;; change this!
+
+;; FUTURE WORK
+
+;;   * An `edit' command that pops open your $EDITOR with a single
+;;     definition and commits the new definition back to the workspace
+
+;;   * Integration with Gambit's powerful REPL, and enabling the use
+;;     of Gambit's REPL commands inside GT
+
+;;   * Being smarter about what counts as a define and what it defines.
+;;     (A macro that expands to a bunch of `define' forms should be a
+;;     definition form!)
+
+;;   * Other schemes. Maybe other programming languages. (How does GT
+;;     for Python sound?)
+
 (define gt#def-table (make-table size: 500 init: #f))
 
 (define gt#workspace '())
