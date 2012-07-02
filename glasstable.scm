@@ -83,6 +83,8 @@
 
 (define gt#remembers-expressions #f)
 
+(define gt#always-evals-workspace #f)
+
 (define (gt#definition? form)
   (and
    (list? form)
@@ -148,30 +150,38 @@
 (define (gt#prompt) "gt> ")
 
 (define (gt#repl #!optional (in-port (repl-input-port)) (out-port (repl-output-port)))
-  (let loop ()
-    (display (gt#prompt) out-port)
-    (force-output out-port)
-    (let ((form (read in-port)))
-      (##continuation-capture
-       (lambda (k)
-	 (with-exception-catcher
-	  (lambda (e)
-	    (##display-exception-in-context
-	     e k out-port))
-	  (lambda () 
-	    (if (and (pair? form)
-		     (eq? (car form) 'unquote))
-		(gt#do-command (cadr form))
-		(let ((result (eval form)))
-		  (if (not (eq? result #!void)) (begin (pretty-print result)))
-		  (gt#add-to-workspace! form)))))))
-      (loop))))
+  (call-with-current-continuation
+   (lambda (k1)
+     (let loop ()
+       (display (gt#prompt) out-port)
+       (force-output out-port)
+       (let ((form (read in-port)))
+	 (##continuation-capture
+	  (lambda (k2)
+	    (with-exception-catcher
+	     (lambda (e)
+	       (##display-exception-in-context
+		e k2 out-port))
+	     (lambda () 
+	       (cond
+		((eof-object? form) (k1 #!void))
+		((and (pair? form)
+		      (eq? (car form) 'unquote))
+		 (gt#do-command (cadr form) k1))
+		(else (let ((result (eval form)))
+			(if (not (eq? result #!void)) (begin (pretty-print result)))
+			(gt#add-to-workspace! form)))))))))
+       (loop)))))
 
-(define (gt#do-command cmd)
+(define (gt#do-command cmd gt-exit)
   (if (pair? cmd)
       (cond
        ((eq? (car cmd) 'new-workspace)
 	(gt#new-workspace))
+       ((eq? (car cmd) 'eval-workspace)
+	(gt#eval-workspace))
+       ((eq? (car cmd) 'quit)
+	(gt-exit #!void))
        ((eq? (car cmd) 'save-workspace)
 	(if (not (and (pair? (cdr cmd)) (string? (cadr cmd))))
 	    (error "file name for save-workspace must be a string")
