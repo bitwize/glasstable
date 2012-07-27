@@ -168,9 +168,11 @@
 		((and (pair? form)
 		      (eq? (car form) 'unquote))
 		 (gt#do-command (cadr form) k1))
-		(else (let ((result (eval form)))
-			(if (not (eq? result #!void)) (begin (pretty-print result)))
-			(gt#add-to-workspace! form)))))))))
+		(else
+		 (gt#add-to-workspace! form)
+		 (let ((result (if gt#always-evals-workspace
+				   (gt#eval-workspace) (eval form))))
+		   (if (not (eq? result #!void)) (begin (pretty-print result)))))))))))
        (loop)))))
 
 (define (gt#do-command cmd gt-exit)
@@ -193,4 +195,8 @@
        ((eq? (car cmd) 'workspace-defs-only)
 	(set! gt#remembers-expressions #f))
        ((eq? (car cmd) 'workspace-defs-and-exprs)
-	(set! gt#remembers-expressions #t)))))
+	(set! gt#remembers-expressions #t))
+       ((eq? (car cmd) 'workspace-eval-dynamic)
+	(set! gt#always-evals-workspace #t))
+       ((eq? (car cmd) 'workspace-eval-explicit)
+	(set! gt#always-evals-workspace #f)))))
