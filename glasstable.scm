@@ -58,14 +58,19 @@
 ;;     Any further form entered into the REPL will be committed to the
 ;;     workspace.
 
+;;   * ,(edit sym)
+
+;;     Start an editor (by default $EDITOR, or 'vi' if not set) and
+;;     lets the user edit the workspace definiton of `sym`. When the
+;;     editor is saved and closed, the edited definition replaces the
+;;     old one in the workspace and is evaled. It won't work if the
+;;     saved file is not a valid definition form.
+
 ;; Because I wrote a rudimentary REPL for GT for the time being, the
 ;; Gambit REPL commands don't work inside the GT REPL. I want to
 ;; change this!
 
 ;; FUTURE WORK
-
-;;   * An `edit' command that pops open your $EDITOR with a single
-;;     definition and commits the new definition back to the workspace
 
 ;;   * Integration with Gambit's powerful REPL, and enabling the use
 ;;     of Gambit's REPL commands inside GT
@@ -147,6 +152,38 @@
 		(gt#add-to-workspace! item)
 		(loop (read p)))))))))
 
+
+(define (gt#editor)
+  (getenv "EDITOR" "vi"))
+
+(define (gt#edit1 obj)
+  (let* ((temp-file (string-append "/tmp/gt-"
+				   (number->string (time->seconds (current-time))))))
+    (with-exception-catcher
+     (lambda (x) (if (file-exists? temp-file) (delete-file temp-file)) (raise x))
+     (lambda ()
+       (let ((p (open-output-file temp-file)))
+	 (with-exception-catcher
+	  (lambda (y) (close-output-port p) (raise y))
+	  (lambda ()
+	    (write obj p)
+	    (close-output-port p))))
+       (shell-command (string-append (gt#editor) " " temp-file))
+       (let ((p (open-input-file temp-file)))
+	 (with-exception-catcher
+	  (lambda (y) (close-input-port p) (raise y))
+	  (lambda () (let ((r (read p))) (delete-file temp-file) r))))))))
+
+(define (gt#edit name)
+  (let ((slot (table-ref gt#def-table name)))
+    (if slot
+	(let ((replacement (gt#edit1 (car slot))))
+	  (gt#add-to-workspace! replacement)
+	  (if gt#always-evals-workspace
+	      (gt#eval-workspace)
+	      (eval replacement)))
+	(error "symbol not in workspace: " name))))
+
 (define (gt#prompt) "gt> ")
 
 (define (gt#repl #!optional (in-port (repl-input-port)) (out-port (repl-output-port)))
@@ -198,5 +235,9 @@
 	(set! gt#remembers-expressions #t))
        ((eq? (car cmd) 'workspace-eval-dynamic)
 	(set! gt#always-evals-workspace #t))
+       ((eq? (car cmd) 'edit)
+	     (if (not (and (pair? (cdr cmd)) (symbol? (cadr cmd))))
+		 (error "must name a symbol to edit")
+		 (gt#edit (cadr cmd))))
        ((eq? (car cmd) 'workspace-eval-explicit)
 	(set! gt#always-evals-workspace #f)))))
