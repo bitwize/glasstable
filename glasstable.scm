@@ -72,17 +72,54 @@
 
 ;; FUTURE WORK
 
-;;   * Integration with Gambit's powerful REPL, and enabling the use
-;;     of Gambit's REPL commands inside GT
-
 ;;   * Being smarter about what counts as a define and what it defines.
 ;;     (A macro that expands to a bunch of `define' forms should be a
 ;;     definition form!)
 
-;;   * Other schemes. Maybe other programming languages. (How does GT
-;;     for Python sound?)
+;;   * Other schemes. Maybe other programming languages.
+
+(include "~~/lib/_repl#.scm")
 
 (define gt#def-table (make-table size: 500 init: #f))
+
+(define (gt#cmd-table channel old-read)
+		      (list->table
+		       (list
+			(cons 'new-workspace
+			      (lambda (cmd) (gt#new-workspace)))
+			(cons 'eval-workspace
+			      (lambda (cmd) (gt#eval-workspace)))
+			(cons 'quit
+			      (lambda (cmd)
+				(macro-repl-channel-read-command-set!
+				 channel old-read)))
+			(cons 'save-workspace
+			      (lambda (cmd) (if (not (and (pair? (cdr cmd)) (string? (cadr cmd))))
+					     (error "file name for save-workspace must be a string")
+					     (gt#save-workspace (cadr cmd)))))
+			(cons 'load-workspace
+			      (lambda (cmd) (if (not (and (pair? (cdr cmd)) (string? (cadr cmd))))
+					     (error "file name for load-workspace must be a string")
+					     (gt#load-workspace (cadr cmd)))))
+			(cons 'workspace-defs-only
+			      (lambda (cmd) (set! gt#remembers-expressions #f)))
+			(cons 'workspace-defs-and-exprs
+			      (lambda (cmd) (set! gt#remembers-expressions #t)))
+			(cons 'workspace-eval-dynamic
+			      (lambda (cmd) (set! gt#always-evals-workspace #t)))
+			(cons 'edit
+			      (lambda (cmd) (if (not (and (pair? (cdr cmd)) (symbol? (cadr cmd))))
+					     (error "must name a symbol to edit")
+					     (gt#edit (cadr cmd)))))
+			(cons 'workspace-eval-explicit
+			      (lambda (cmd) (set! gt#always-evals-workspace #f))))))
+
+(define (gt#command? form tbl)
+  (and (pair? form)
+       (pair? (cdr form))
+       (eq? (car form) 'unquote)
+       (pair? (cadr form))
+       (table-ref tbl (caadr form))))
 
 (define gt#workspace '())
 
@@ -186,58 +223,25 @@
 
 (define (gt#prompt) "gt> ")
 
-(define (gt#repl #!optional (in-port (repl-input-port)) (out-port (repl-output-port)))
-  (call-with-current-continuation
-   (lambda (k1)
-     (let loop ()
-       (display (gt#prompt) out-port)
-       (force-output out-port)
-       (let ((form (read in-port)))
-	 (##continuation-capture
-	  (lambda (k2)
-	    (with-exception-catcher
-	     (lambda (e)
-	       (##display-exception-in-context
-		e k2 out-port))
-	     (lambda () 
-	       (cond
-		((eof-object? form) (k1 #!void))
-		((and (pair? form)
-		      (eq? (car form) 'unquote))
-		 (gt#do-command (cadr form) k1))
-		(else
-		 (gt#add-to-workspace! form)
-		 (let ((result (if gt#always-evals-workspace
-				   (gt#eval-workspace) (eval form))))
-		   (if (not (eq? result #!void)) (begin (pretty-print result)))))))))))
-       (loop)))))
+(define (gt#gt-wrap x)
+  (lambda (channel level depth)
+    (let ((cmd-table (gt#cmd-table channel x)))
+      (begin
+	(display "gt|")
+	(let* ((src (x channel level depth))
+	       (usrc (##desourcify src)))
+	  (if (gt#command? usrc cmd-table)
+	      (begin
+		((table-ref cmd-table (caadr usrc)) (cadr usrc))
+		(##make-source #!void (##source-locat src)))
+	      (begin
+		(if (or
+		     gt#remembers-expressions
+		     (gt#definition? usrc))
+		    (gt#add-to-workspace! usrc))
+		src)))))))
 
-(define (gt#do-command cmd gt-exit)
-  (if (pair? cmd)
-      (cond
-       ((eq? (car cmd) 'new-workspace)
-	(gt#new-workspace))
-       ((eq? (car cmd) 'eval-workspace)
-	(gt#eval-workspace))
-       ((eq? (car cmd) 'quit)
-	(gt-exit #!void))
-       ((eq? (car cmd) 'save-workspace)
-	(if (not (and (pair? (cdr cmd)) (string? (cadr cmd))))
-	    (error "file name for save-workspace must be a string")
-	    (gt#save-workspace (cadr cmd))))
-       ((eq? (car cmd) 'load-workspace)
-	(if (not (and (pair? (cdr cmd)) (string? (cadr cmd))))
-	    (error "file name for load-workspace must be a string")
-	    (gt#load-workspace (cadr cmd))))
-       ((eq? (car cmd) 'workspace-defs-only)
-	(set! gt#remembers-expressions #f))
-       ((eq? (car cmd) 'workspace-defs-and-exprs)
-	(set! gt#remembers-expressions #t))
-       ((eq? (car cmd) 'workspace-eval-dynamic)
-	(set! gt#always-evals-workspace #t))
-       ((eq? (car cmd) 'edit)
-	     (if (not (and (pair? (cdr cmd)) (symbol? (cadr cmd))))
-		 (error "must name a symbol to edit")
-		 (gt#edit (cadr cmd))))
-       ((eq? (car cmd) 'workspace-eval-explicit)
-	(set! gt#always-evals-workspace #f)))))
+(define (gt#repl #!optional (channel (##thread-repl-channel-get! (current-thread))))
+  (let ((new-read (gt#gt-wrap (macro-repl-channel-read-command channel))))
+    (macro-repl-channel-read-command-set! channel new-read)))
+
