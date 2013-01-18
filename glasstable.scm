@@ -235,6 +235,8 @@
 		((table-ref cmd-table (caadr usrc)) (cadr usrc))
 		(##make-source #!void (##source-locat src)))
 	      (begin
+		(if gt#always-evals-workspace
+		    (gt#eval-workspace))
 		(if (or
 		     gt#remembers-expressions
 		     (gt#definition? usrc))
