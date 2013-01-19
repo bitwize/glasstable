@@ -94,12 +94,17 @@
 				(macro-repl-channel-read-command-set!
 				 channel old-read)))
 			(cons 'save-workspace
-			      (lambda (cmd) (if (not (and (pair? (cdr cmd)) (string? (cadr cmd))))
-					     (error "file name for save-workspace must be a string")
-					     (gt#save-workspace (cadr cmd)))))
+			      (lambda (cmd)
+				(if (null? (cdr cmd))
+				    (if gt#workspace-name
+					(gt#save-workspace gt#workspace-name)
+					(error "workspace not named;you must specify a string file name for save-workspace"))
+				    (if (not (and (pair? (cdr cmd)) (string? (cadr cmd))))
+					(error "you must specify a string file name for save-workspace")
+					(gt#save-workspace (cadr cmd))))))
 			(cons 'load-workspace
 			      (lambda (cmd) (if (not (and (pair? (cdr cmd)) (string? (cadr cmd))))
-					     (error "file name for load-workspace must be a string")
+					     (error "you must specify a string file name for load-workspace")
 					     (gt#load-workspace (cadr cmd)))))
 			(cons 'workspace-defs-only
 			      (lambda (cmd) (set! gt#remembers-expressions #f)))
@@ -122,6 +127,8 @@
        (table-ref tbl (caadr form))))
 
 (define gt#workspace '())
+
+(define gt#workspace-name #f)
 
 (define gt#remembers-expressions #f)
 
@@ -167,10 +174,12 @@
 	  (pretty-print x p)
 	  (newline p))
 	(reverse gt#workspace))
+       (set! gt#workspace-name fn)
        (close-port p)))))
 
 (define (gt#new-workspace)
   (set! gt#workspace '())
+  (set! gt#workspace-name #f)
   (set! gt#def-table (make-table size: 500 init: #f)))
 
 (define (gt#eval-workspace)
@@ -184,6 +193,7 @@
        (let loop ((item (read p)))
 	 (cond ((eof-object? item)
 		(gt#eval-workspace)
+		(set! gt#workspace-name fn)
 		(close-port p))
 	       (else
 		(gt#add-to-workspace! item)
