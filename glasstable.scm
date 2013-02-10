@@ -213,7 +213,7 @@
 	 (with-exception-catcher
 	  (lambda (y) (close-output-port p) (raise y))
 	  (lambda ()
-	    (write obj p)
+	    (pretty-print obj p)
 	    (close-output-port p))))
        (shell-command (string-append (gt#editor) " " temp-file))
        (let ((p (open-input-file temp-file)))
